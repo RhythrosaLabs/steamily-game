@@ -1,38 +1,39 @@
 import streamlit as st
-import requests
+import random
 from PIL import Image
 import io
 
-# Placeholder for GPT-4o-mini API call
+# Simulated story generation function
 def generate_story(prompt):
-    # In a real implementation, you would make an API call to GPT-4o-mini here
-    api_url = "https://api.gpt4o-mini.example.com/generate"  # Replace with actual API endpoint
-    headers = {"Authorization": "Bearer YOUR_API_KEY"}
-    data = {"prompt": prompt, "max_tokens": 100}
-    
-    response = requests.post(api_url, headers=headers, json=data)
-    if response.status_code == 200:
-        return response.json()["generated_text"]
-    else:
-        return "Error generating story. Please try again."
+    stories = [
+        "As you venture deeper into the cave, you discover a glowing crystal formation.",
+        "You encounter a group of friendly dwarves who offer to guide you through the cavern.",
+        "A underground river blocks your path. You need to find a way to cross it.",
+        "You stumble upon an ancient artifact that seems to possess magical properties.",
+        "The cave suddenly trembles, and you realize you're in the lair of a sleeping dragon."
+    ]
+    return random.choice(stories)
 
-# Placeholder for DALLE-3 API call
+# Simulated image generation function
 def generate_image(prompt):
-    # In a real implementation, you would make an API call to DALLE-3 here
-    api_url = "https://api.dalle3.example.com/generate"  # Replace with actual API endpoint
-    headers = {"Authorization": "Bearer YOUR_API_KEY"}
-    data = {"prompt": prompt, "size": "256x256"}
-    
-    response = requests.post(api_url, headers=headers, json=data)
-    if response.status_code == 200:
-        image_data = response.content
-        return Image.open(io.BytesIO(image_data))
-    else:
-        # Return a placeholder image if there's an error
-        return Image.new('RGB', (256, 256), color = (73, 109, 137))
+    # Create a simple colored rectangle as a placeholder image
+    color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+    img = Image.new('RGB', (300, 200), color=color)
+    return img
+
+# Simulated choice generation function
+def generate_choices(story):
+    choice_sets = [
+        ["Examine the crystals", "Look for an exit", "Rest for a while"],
+        ["Accept the dwarves' help", "Continue alone", "Ask about the cave's history"],
+        ["Try to build a raft", "Look for a bridge", "Attempt to swim across"],
+        ["Pick up the artifact", "Leave it alone", "Try to decipher its inscriptions"],
+        ["Attempt to sneak past", "Try to communicate with the dragon", "Search for another route"]
+    ]
+    return random.choice(choice_sets)
 
 def main():
-    st.title("AI-Powered RPG Adventure")
+    st.title("AI-Simulated RPG Adventure")
 
     # Initialize session state
     if 'story' not in st.session_state:
@@ -48,14 +49,12 @@ def main():
     choice = st.radio("What do you want to do?", st.session_state.choices)
 
     if st.button("Make choice"):
-        # Generate new story based on choice using GPT-4o-mini
+        # Generate new story based on choice
         new_story = generate_story(f"{st.session_state.story} The player chose to {choice}.")
         st.session_state.story = new_story
         
-        # Generate new choices using GPT-4o-mini
-        choices_prompt = f"Based on this story: {new_story}, generate three possible actions for the player."
-        new_choices = generate_story(choices_prompt).split(", ")  # Assuming the API returns choices separated by commas
-        st.session_state.choices = new_choices
+        # Generate new choices
+        st.session_state.choices = generate_choices(new_story)
 
         # Force a rerun to update the page
         st.experimental_rerun()
