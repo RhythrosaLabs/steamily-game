@@ -3,49 +3,70 @@ import random
 from PIL import Image
 import io
 import base64
-import openai
+from openai import OpenAI
+
+# Initialize OpenAI client
+client = None
 
 # Function to generate image using DALL-E 3
 def generate_image(prompt):
-    response = openai.Image.create(
-        model="dall-e-3",
-        prompt=prompt,
-        n=1,
-        size="1024x1024"
-    )
-    image_url = response['data'][0]['url']
-    return image_url
+    try:
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            n=1,
+            size="1024x1024"
+        )
+        return response.data[0].url
+    except Exception as e:
+        st.error(f"Error generating image: {str(e)}")
+        return None
 
 # Function to generate story using GPT-4
 def generate_story(prompt):
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a creative RPG game master. Generate a short, engaging story segment based on the given prompt."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    return response.choices[0].message['content']
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a creative RPG game master. Generate a short, engaging story segment based on the given prompt."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error generating story: {str(e)}")
+        return "An error occurred while generating the story."
 
 # Function to generate choices using GPT-4
 def generate_choices(story):
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You are a creative RPG game master. Generate three interesting choices for the player based on the given story segment."},
-            {"role": "user", "content": f"Given this story: {story}\nProvide three choices for the player."}
-        ]
-    )
-    choices = response.choices[0].message['content'].split('\n')
-    return [choice.strip() for choice in choices if choice.strip()]
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a creative RPG game master. Generate three interesting choices for the player based on the given story segment."},
+                {"role": "user", "content": f"Given this story: {story}\nProvide three choices for the player."}
+            ]
+        )
+        choices = response.choices[0].message.content.split('\n')
+        return [choice.strip() for choice in choices if choice.strip()]
+    except Exception as e:
+        st.error(f"Error generating choices: {str(e)}")
+        return ["Continue", "Rest", "Give up"]
 
 def main():
+    global client
     st.title("AI-Generated RPG Adventure")
 
     # API Key input
     api_key = st.text_input("Enter your OpenAI API key:", type="password")
     if api_key:
-        openai.api_key = api_key
+        try:
+            client = OpenAI(api_key=api_key)
+            # Test the API key
+            client.models.list()
+        except Exception as e:
+            st.error(f"Invalid API key: {str(e)}")
+            return
     else:
         st.warning("Please enter your OpenAI API key to play the game.")
         return
@@ -61,12 +82,13 @@ def main():
         st.header("Choose Your Character")
         character_prompt = "Generate 4 unique fantasy RPG character descriptions, each in one sentence."
         characters = generate_story(character_prompt).split('\n')
-        character_images = [generate_image(char) for char in characters]
+        character_images = [generate_image(char) for char in characters if char]
 
         cols = st.columns(4)
         for i, (char, img) in enumerate(zip(characters, character_images)):
             with cols[i]:
-                st.image(img, use_column_width=True)
+                if img:
+                    st.image(img, use_column_width=True)
                 st.write(char)
                 if st.button(f"Choose Character {i+1}"):
                     st.session_state.character = char
@@ -83,7 +105,9 @@ def main():
 
     elif st.session_state.game_state == 'playing':
         st.write(st.session_state.story)
-        st.image(generate_image(st.session_state.story), use_column_width=True)
+        story_image = generate_image(st.session_state.story)
+        if story_image:
+            st.image(story_image, use_column_width=True)
 
         choice = st.radio("What do you want to do?", st.session_state.choices)
 
