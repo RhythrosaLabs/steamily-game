@@ -1,6 +1,5 @@
 import streamlit as st
 import random
-import openai
 from PIL import Image
 import io
 import base64
