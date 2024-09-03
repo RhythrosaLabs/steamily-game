@@ -3,6 +3,7 @@ import random
 from PIL import Image
 import io
 import base64
+import openai
 
 # Function to generate image using DALL-E 3
 def generate_image(prompt):
