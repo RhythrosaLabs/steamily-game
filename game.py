@@ -1,14 +1,13 @@
 import streamlit as st
 import random
 from PIL import Image
-import io
 
 # Simulated story generation function
 def generate_story(prompt):
     stories = [
         "As you venture deeper into the cave, you discover a glowing crystal formation.",
         "You encounter a group of friendly dwarves who offer to guide you through the cavern.",
-        "A underground river blocks your path. You need to find a way to cross it.",
+        "An underground river blocks your path. You need to find a way to cross it.",
         "You stumble upon an ancient artifact that seems to possess magical properties.",
         "The cave suddenly trembles, and you realize you're in the lair of a sleeping dragon."
     ]
@@ -56,8 +55,8 @@ def main():
         # Generate new choices
         st.session_state.choices = generate_choices(new_story)
 
-        # Force a rerun to update the page
-        st.experimental_rerun()
+        # Instead of using experimental_rerun, we'll use st.rerun()
+        st.rerun()
 
 if __name__ == "__main__":
     main()
