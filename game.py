@@ -2,72 +2,70 @@ import streamlit as st
 import random
 from openai import OpenAI
 import json
+import time
 
 # Initialize OpenAI client
 client = None
 
+# Caching the OpenAI API calls
+@st.cache_data(ttl=3600)
+def cached_openai_call(model, messages):
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages
+    )
+    return response.choices[0].message.content
+
 # Function to generate image using DALL-E 3
+@st.cache_data(ttl=3600)
 def generate_image(prompt):
-    try:
-        response = client.images.generate(
-            model="dall-e-3",
-            prompt=prompt + " Full body portrait with no background, focusing on the character.",
-            n=1,
-            size="1024x1024"
-        )
-        return response.data[0].url
-    except Exception as e:
-        st.error(f"Error generating image: {str(e)}")
-        return None
+    with st.spinner("Generating image..."):
+        try:
+            response = client.images.generate(
+                model="dall-e-3",
+                prompt=prompt + " Full body portrait with no background, focusing on the character.",
+                n=1,
+                size="1024x1024"
+            )
+            return response.data[0].url
+        except Exception as e:
+            st.error(f"Error generating image: {str(e)}")
+            return None
 
-# Function to generate story using GPT-4
-def generate_story(prompt, memory):
-    try:
-        messages = [
-            {"role": "system", "content": "You are a creative RPG game master. Generate a short, engaging story segment based on the given prompt and previous events."},
-            {"role": "user", "content": f"Previous events: {json.dumps(memory)}\n\nNew prompt: {prompt}"}
-        ]
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=messages
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"Error generating story: {str(e)}")
-        return "An error occurred while generating the story."
+# Combined function to generate story and choices
+def generate_story_and_choices(prompt, memory):
+    with st.spinner("Generating story and choices..."):
+        try:
+            messages = [
+                {"role": "system", "content": "You are a creative RPG game master. Generate a short, engaging story segment based on the given prompt and previous events. Then, provide three interesting choices for the player."},
+                {"role": "user", "content": f"Previous events: {json.dumps(memory)}\n\nNew prompt: {prompt}\n\nProvide the story followed by three choices for the player."}
+            ]
+            response = cached_openai_call("gpt-4o-mini", messages)
+            parts = response.split("\n\nChoices:")
+            story = parts[0].strip()
+            choices = parts[1].strip().split("\n") if len(parts) > 1 else ["Continue", "Rest", "Give up"]
+            return story, [choice.strip() for choice in choices if choice.strip()]
+        except Exception as e:
+            st.error(f"Error generating story and choices: {str(e)}")
+            return "An error occurred while generating the story.", ["Continue", "Rest", "Give up"]
 
-# Function to generate choices using GPT-4
-def generate_choices(story, memory):
-    try:
-        messages = [
-            {"role": "system", "content": "You are a creative RPG game master. Generate three interesting choices for the player based on the given story segment and previous events."},
-            {"role": "user", "content": f"Previous events: {json.dumps(memory)}\n\nCurrent story: {story}\n\nProvide three choices for the player."}
-        ]
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=messages
-        )
-        choices = response.choices[0].message.content.split('\n')
-        return [choice.strip() for choice in choices if choice.strip()]
-    except Exception as e:
-        st.error(f"Error generating choices: {str(e)}")
-        return ["Continue", "Rest", "Give up"]
-
-# Function to update inventory
-def update_inventory(action, memory):
-    try:
-        messages = [
-            {"role": "system", "content": "You are an RPG inventory manager. Update the player's inventory based on their actions and the story."},
-            {"role": "user", "content": f"Previous events and inventory: {json.dumps(memory)}\n\nPlayer action: {action}\n\nUpdate the inventory. Add or remove items as necessary. Provide the updated inventory as a JSON object."}
-        ]
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages
-        )
-        return json.loads(response.choices[0].message.content)
-    except Exception as e:
-        st.error(f"Error updating inventory: {str(e)}")
-        return memory.get('inventory', {})
+# Function to update inventory and generate next story segment
+def update_inventory_and_continue(action, memory):
+    with st.spinner("Updating inventory and continuing the story..."):
+        try:
+            messages = [
+                {"role": "system", "content": "You are an RPG game master and inventory manager. Update the player's inventory based on their actions and the story, then continue the story and provide new choices."},
+                {"role": "user", "content": f"Previous events and inventory: {json.dumps(memory)}\n\nPlayer action: {action}\n\nUpdate the inventory, continue the story, and provide three new choices for the player."}
+            ]
+            response = cached_openai_call("gpt-4o-mini", messages)
+            parts = response.split("\n\n")
+            inventory = json.loads(parts[0])
+            story = parts[1]
+            choices = parts[2].split("\n") if len(parts) > 2 else ["Continue", "Rest", "Give up"]
+            return inventory, story, [choice.strip() for choice in choices if choice.strip()]
+        except Exception as e:
+            st.error(f"Error updating inventory and continuing story: {str(e)}")
+            return memory.get('inventory', {}), "An error occurred while updating the story.", ["Continue", "Rest", "Give up"]
 
 def main():
     global client
@@ -117,12 +115,15 @@ def main():
 
     elif st.session_state.game_state == 'character_selection':
         st.header("Choose Your Character")
-        character_prompt = f"Generate 4 unique {st.session_state.memory['genre']} RPG character descriptions, each in one sentence. Focus on {', '.join(st.session_state.memory['story_focus'])}."
-        characters = generate_story(character_prompt, st.session_state.memory).split('\n')
-        character_images = [generate_image(char) for char in characters if char]
+        
+        if 'characters' not in st.session_state:
+            with st.spinner("Generating characters..."):
+                character_prompt = f"Generate 4 unique {st.session_state.memory['genre']} RPG character descriptions, each in one sentence. Focus on {', '.join(st.session_state.memory['story_focus'])}."
+                st.session_state.characters = cached_openai_call("gpt-4o-mini", [{"role": "user", "content": character_prompt}]).split('\n')
+                st.session_state.character_images = [generate_image(char) for char in st.session_state.characters if char]
 
         cols = st.columns(4)
-        for i, (char, img) in enumerate(zip(characters, character_images)):
+        for i, (char, img) in enumerate(zip(st.session_state.characters, st.session_state.character_images)):
             with cols[i]:
                 if img:
                     st.image(img, use_column_width=True)
@@ -135,10 +136,10 @@ def main():
 
     elif st.session_state.game_state == 'game_start':
         st.header("Your Adventure Begins")
-        initial_prompt = f"Start a {st.session_state.memory['genre']} RPG adventure for this character: {st.session_state.character}. The story should focus on {', '.join(st.session_state.memory['story_focus'])} with a difficulty level of {st.session_state.memory['difficulty']}."
-        st.session_state.story = generate_story(initial_prompt, st.session_state.memory)
-        st.session_state.memory['events'].append(st.session_state.story)
-        st.session_state.choices = generate_choices(st.session_state.story, st.session_state.memory)
+        with st.spinner("Starting your adventure..."):
+            initial_prompt = f"Start a {st.session_state.memory['genre']} RPG adventure for this character: {st.session_state.character}. The story should focus on {', '.join(st.session_state.memory['story_focus'])} with a difficulty level of {st.session_state.memory['difficulty']}."
+            st.session_state.story, st.session_state.choices = generate_story_and_choices(initial_prompt, st.session_state.memory)
+            st.session_state.memory['events'].append(st.session_state.story)
         st.session_state.game_state = 'playing'
         st.rerun()
 
@@ -154,12 +155,13 @@ def main():
             choice = st.radio("What do you want to do?", st.session_state.choices)
 
             if st.button("Make choice"):
-                new_story = generate_story(f"{st.session_state.story} The player chose to {choice}.", st.session_state.memory)
-                st.session_state.memory['events'].append(f"Player chose: {choice}")
-                st.session_state.memory['events'].append(new_story)
-                st.session_state.story = new_story
-                st.session_state.choices = generate_choices(new_story, st.session_state.memory)
-                st.session_state.memory['inventory'] = update_inventory(choice, st.session_state.memory)
+                with st.spinner("Processing your choice..."):
+                    inventory, new_story, new_choices = update_inventory_and_continue(choice, st.session_state.memory)
+                    st.session_state.memory['inventory'] = inventory
+                    st.session_state.memory['events'].append(f"Player chose: {choice}")
+                    st.session_state.memory['events'].append(new_story)
+                    st.session_state.story = new_story
+                    st.session_state.choices = new_choices
                 st.rerun()
 
         with col2:
