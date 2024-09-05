@@ -44,7 +44,7 @@ def generate_choices(story, memory):
             {"role": "user", "content": f"Previous events: {json.dumps(memory)}\n\nCurrent story: {story}\n\nProvide three choices for the player."}
         ]
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4",
             messages=messages
         )
         choices = response.choices[0].message.content.split('\n')
@@ -88,15 +88,36 @@ def main():
 
     # Initialize session state
     if 'game_state' not in st.session_state:
-        st.session_state.game_state = 'character_selection'
+        st.session_state.game_state = 'begin'
         st.session_state.character = None
         st.session_state.story = None
         st.session_state.choices = None
         st.session_state.memory = {'events': [], 'inventory': {}}
 
-    if st.session_state.game_state == 'character_selection':
+    if st.session_state.game_state == 'begin':
+        st.header("Welcome to the AI-Generated RPG Adventure!")
+        st.write("Customize your adventure before you begin:")
+        
+        genre = st.selectbox("Choose your adventure genre:", 
+                             ["Fantasy", "Sci-Fi", "Post-Apocalyptic", "Steampunk", "Modern"])
+        
+        difficulty = st.slider("Select difficulty level:", 1, 5, 3)
+        
+        story_focus = st.multiselect("Select story focus (max 2):", 
+                                     ["Combat", "Exploration", "Puzzle-solving", "Character interaction", "Resource management"],
+                                     default=["Exploration"],
+                                     max_selections=2)
+        
+        if st.button("Begin Adventure"):
+            st.session_state.memory['genre'] = genre
+            st.session_state.memory['difficulty'] = difficulty
+            st.session_state.memory['story_focus'] = story_focus
+            st.session_state.game_state = 'character_selection'
+            st.rerun()
+
+    elif st.session_state.game_state == 'character_selection':
         st.header("Choose Your Character")
-        character_prompt = "Generate 4 unique fantasy RPG character descriptions, each in one sentence."
+        character_prompt = f"Generate 4 unique {st.session_state.memory['genre']} RPG character descriptions, each in one sentence. Focus on {', '.join(st.session_state.memory['story_focus'])}."
         characters = generate_story(character_prompt, st.session_state.memory).split('\n')
         character_images = [generate_image(char) for char in characters if char]
 
@@ -114,7 +135,7 @@ def main():
 
     elif st.session_state.game_state == 'game_start':
         st.header("Your Adventure Begins")
-        initial_prompt = f"Start an RPG adventure for this character: {st.session_state.character}"
+        initial_prompt = f"Start a {st.session_state.memory['genre']} RPG adventure for this character: {st.session_state.character}. The story should focus on {', '.join(st.session_state.memory['story_focus'])} with a difficulty level of {st.session_state.memory['difficulty']}."
         st.session_state.story = generate_story(initial_prompt, st.session_state.memory)
         st.session_state.memory['events'].append(st.session_state.story)
         st.session_state.choices = generate_choices(st.session_state.story, st.session_state.memory)
