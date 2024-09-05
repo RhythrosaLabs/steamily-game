@@ -61,7 +61,7 @@ def update_inventory(action, memory):
             {"role": "user", "content": f"Previous events and inventory: {json.dumps(memory)}\n\nPlayer action: {action}\n\nUpdate the inventory. Add or remove items as necessary. Provide the updated inventory as a JSON object."}
         ]
         response = client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=messages
         )
         return json.loads(response.choices[0].message.content)
