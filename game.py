@@ -1,8 +1,7 @@
 import streamlit as st
-import openai
 import json
 
-# Function to generate image using DALL-E
+# Function to generate image using DALL·E
 def generate_image(prompt):
     try:
         response = openai.Image.create(
@@ -98,11 +97,18 @@ def main():
     # API Key input
     api_key = st.sidebar.text_input("Enter your OpenAI API key:", type="password")
     if api_key:
+        openai.api_key = api_key
+        # Perform a minimal test request to validate the API key
         try:
-            openai.api_key = api_key
-            openai.Model.list()
+            openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[{"role": "user", "content": "Hello"}]
+            )
+        except openai.error.AuthenticationError:
+            st.error("Invalid API key. Please check and try again.")
+            return
         except Exception as e:
-            st.error(f"Invalid API key: {str(e)}")
+            st.error(f"Error validating API key: {str(e)}")
             return
     else:
         st.warning("Please enter your OpenAI API key to play the game.")
